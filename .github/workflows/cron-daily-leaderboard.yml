@@ -1,0 +1,155 @@
+name: Cron — Clasificación diaria (11:00 Madrid)
+# El "(dry)" del run-name lo usa el job gate para excluir ensayos del dedupe.
+run-name: Clasificación diaria${{ inputs.dry_run == 'true' && ' (dry)' || '' }}
+
+# Manda solo la imagen de la clasificación con una caption mínima, sin comentario
+# de IA. El disparo lo hace el dispatcher del VPS a las 11:00 de Madrid (igual que
+# cron-matches): el schedule de GHA era best-effort y se saltó por completo el
+# 13/06. Queda workflow_dispatch para disparo manual / respaldo.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Si 'true', no publica a WhatsApp (DRY_RUN=1)"
+        required: false
+        default: "false"
+      only_pool:
+        description: "Qué porra ejecutar: familia | amigos | all"
+        required: false
+        default: "all"
+
+# Mismo grupo que cron-matches: nunca dos envíos WhatsApp en paralelo.
+concurrency:
+  group: porra-cron-global
+  cancel-in-progress: false
+
+# No commitea nada: solo lectura del repo. actions:read para que el gate
+# pueda listar las runs del propio workflow (dedupe).
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  # Anti-duplicados (lección del 12/06: un schedule "saltado" disparó 3 h tarde
+  # tras un reenvío manual → imagen doble en los grupos). Los schedules se
+  # abortan si hoy ya hubo un envío real; los dispatch manuales pasan siempre.
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      should_send: ${{ steps.check.outputs.should_send }}
+    steps:
+      - name: Dedupe de schedules
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "should_send=true" >> "$GITHUB_OUTPUT"
+            echo "Dispatch manual: sin dedupe."
+            exit 0
+          fi
+          HOY=$(date -u +%Y-%m-%d)
+          REALES=$(gh run list -R "${{ github.repository }}" \
+            --workflow=cron-daily-leaderboard.yml \
+            --status=success --created="$HOY" --json displayTitle \
+            --jq '[.[] | select(.displayTitle | contains("(dry)") | not)] | length')
+          if [ "$REALES" -gt 0 ]; then
+            echo "should_send=false" >> "$GITHUB_OUTPUT"
+            echo "Ya hubo $REALES envio(s) real(es) hoy: schedule abortado (anti-duplicados)."
+          else
+            echo "should_send=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  pool-familia:
+    needs: gate
+    if: ${{ needs.gate.outputs.should_send == 'true' && (github.event_name == 'schedule' || inputs.only_pool != 'amigos') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.49.0-${{ runner.os }}
+      - name: Install Playwright Chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            python -m playwright install --with-deps chromium
+          else
+            python -m playwright install-deps chromium
+          fi
+
+      - name: Enviar clasificación diaria (familia)
+        env:
+          POOL_ID: familia
+          WHATSAPP_GROUP_ID: ${{ secrets.WHATSAPP_GROUP_ID_FAMILIA }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/send_daily_leaderboard.py
+
+  pool-amigos:
+    needs: [gate, pool-familia]
+    if: ${{ always() && needs.gate.outputs.should_send == 'true' && (github.event_name == 'schedule' || inputs.only_pool != 'familia') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Espacia el envío de WhatsApp para no encadenar 2 mensajes con imagen
+      # al mismo número en <5s (riesgo de baneo del número).
+      - name: Spread WhatsApp send
+        run: sleep 30
+
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.49.0-${{ runner.os }}
+      - name: Install Playwright Chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            python -m playwright install --with-deps chromium
+          else
+            python -m playwright install-deps chromium
+          fi
+
+      - name: Enviar clasificación diaria (amigos)
+        env:
+          POOL_ID: amigos
+          WHATSAPP_GROUP_ID: ${{ secrets.WHATSAPP_GROUP_ID_AMIGOS }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/send_daily_leaderboard.py

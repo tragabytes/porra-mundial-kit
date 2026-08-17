@@ -1,0 +1,76 @@
+name: Manual — Reingestar predicciones
+
+# Reejecuta scripts/ingest_predictions.py contra los .xlsx que haya en
+# predictions/<pool>/. Solo se dispara manualmente desde la UI de Actions
+# o vía gh CLI: `gh workflow run manual-predictions.yml -f pool=familia`.
+#
+# Se desactiva automáticamente después del 10/06/2026 23:59 UTC (freeze date)
+# para evitar cambios accidentales una vez empieza la competición.
+on:
+  workflow_dispatch:
+    inputs:
+      pool:
+        description: "Qué porra reingest: familia | amigos"
+        required: true
+        default: "familia"
+
+# Push hecho con GH_PAT; GITHUB_TOKEN no necesita escritura.
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verificar freeze date
+        run: |
+          freeze=$(date -u -d "2026-06-10 23:59:59" +%s)
+          now=$(date -u +%s)
+          if [ "$now" -gt "$freeze" ]; then
+            echo "Freeze date superado ($(date -u --date=@$freeze)). Reingest bloqueado."
+            exit 1
+          fi
+          echo "OK, quedan $((freeze - now)) segundos hasta freeze."
+
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Verificar predicciones del pool
+        run: |
+          echo "OJO: este workflow asume que los .xlsx de predictions/${{ inputs.pool }}/"
+          echo "se han subido manualmente al repo via 'git push' desde tu máquina."
+          echo "Si quieres automatizar la subida vía Drive/S3, edita este paso."
+          ls -la "predictions/${{ inputs.pool }}/" 2>/dev/null || echo "predictions/${{ inputs.pool }}/ vacío o inexistente"
+
+      - name: Run ingest_predictions.py (${{ inputs.pool }})
+        env:
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          python scripts/ingest_predictions.py \
+            --admin "pools/${{ inputs.pool }}/ADMIN.xlsx" \
+            --predictions "predictions/${{ inputs.pool }}/"
+
+      - name: Commit y push del ADMIN actualizado
+        run: |
+          git config user.name "porra-bot"
+          git config user.email "porra-bot@users.noreply.github.com"
+          if git diff --quiet "pools/${{ inputs.pool }}/ADMIN.xlsx" 2>/dev/null; then
+            echo "Sin cambios en el ADMIN de ${{ inputs.pool }}."
+          else
+            git add "pools/${{ inputs.pool }}/ADMIN.xlsx"
+            git commit -m "chore(predictions/${{ inputs.pool }}): reingest $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi

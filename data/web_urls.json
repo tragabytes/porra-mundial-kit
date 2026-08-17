@@ -1,0 +1,5 @@
+{
+  "_comment": "URL pública del panel web por porra. El slug del path debe coincidir con WEB_SLUGS del .env del VPS (slug->pool). Recurso común a todas las porras; rellenar con el dominio real al arrancar torneo (las URLs de 2026 murieron con su VPS).",
+  "familia": "https://<tu-dominio>/web/<slug-familia>",
+  "amigos": "https://<tu-dominio>/web/<slug-amigos>"
+}

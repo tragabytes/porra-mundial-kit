@@ -1,0 +1,48 @@
+name: Tests
+
+# Corre los tests al cambiar código/datos. Filtro de rutas para NO dispararse con
+# los commits de state.json/ADMIN del cron (que tocan pools/).
+on:
+  push:
+    paths:
+      - "scripts/**"
+      - "vps/**"
+      - "data/**"
+      - "tests/**"
+      - "requirements*.txt"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "vps/**"
+      - "data/**"
+      - "tests/**"
+      - "requirements*.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  node:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Glob de solo los tests de primer nivel: evita recursar en node_modules.
+      - run: node --test vps/*.test.js

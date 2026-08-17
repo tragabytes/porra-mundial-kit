@@ -1,0 +1,83 @@
+{
+  "_comment": "Mapeo de nombres de equipo de la API de fútbol (inglés) al nombre que usa el Excel de matejero (español). Multiples claves pueden mapear al mismo valor para cubrir aliases (Korea Republic vs South Korea, etc).",
+  "_source_es": "Verificado contra Excel-Mundial-2026.xlsx, hoja WORLDCUP, columnas E y K",
+  "_total_teams": 48,
+  "_groups": "A: MEX, RSA, KOR, CZE | B: CAN, BIH, QAT, SUI | C: BRA, MAR, HAI, SCO | D: USA, PAR, AUS, TUR | E: GER, CUW, CIV, ECU | F: NED, JPN, SWE, TUN | G: BEL, EGY, IRN, NZL | H: ESP, CPV, KSA, URU | I: FRA, SEN, IRQ, NOR | J: ARG, ALG, AUT, JOR | K: POR, COD, UZB, COL | L: ENG, CRO, GHA, PAN",
+
+  "Mexico": "México",
+  "South Africa": "Sudáfrica",
+  "Korea Republic": "Corea del Sur",
+  "South Korea": "Corea del Sur",
+  "Republic of Korea": "Corea del Sur",
+  "Czech Republic": "República Checa",
+  "Czechia": "República Checa",
+
+  "Canada": "Canadá",
+  "Bosnia and Herzegovina": "Bosnia y Herzegovina",
+  "Bosnia-Herzegovina": "Bosnia y Herzegovina",
+  "Qatar": "Catar",
+  "Switzerland": "Suiza",
+
+  "Brazil": "Brasil",
+  "Morocco": "Marruecos",
+  "Haiti": "Haití",
+  "Scotland": "Escocia",
+
+  "United States": "Estados Unidos",
+  "USA": "Estados Unidos",
+  "United States of America": "Estados Unidos",
+  "Paraguay": "Paraguay",
+  "Australia": "Australia",
+  "Turkey": "Turquía",
+  "Türkiye": "Turquía",
+
+  "Germany": "Alemania",
+  "Curaçao": "Curazao",
+  "Curacao": "Curazao",
+  "Ivory Coast": "Costa de Marfil",
+  "Côte d'Ivoire": "Costa de Marfil",
+  "Cote d'Ivoire": "Costa de Marfil",
+  "Ecuador": "Ecuador",
+
+  "Netherlands": "Países Bajos",
+  "Holland": "Países Bajos",
+  "Japan": "Japón",
+  "Sweden": "Suecia",
+  "Tunisia": "Túnez",
+
+  "Belgium": "Bélgica",
+  "Egypt": "Egipto",
+  "Iran": "Irán",
+  "Islamic Republic of Iran": "Irán",
+  "IR Iran": "Irán",
+  "New Zealand": "Nueva Zelanda",
+
+  "Spain": "España",
+  "Cape Verde": "Cabo Verde",
+  "Cape Verde Islands": "Cabo Verde",
+  "Cabo Verde": "Cabo Verde",
+  "Saudi Arabia": "Arabia Saudita",
+  "Uruguay": "Uruguay",
+
+  "France": "Francia",
+  "Senegal": "Senegal",
+  "Iraq": "Irak",
+  "Norway": "Noruega",
+
+  "Argentina": "Argentina",
+  "Algeria": "Argelia",
+  "Austria": "Austria",
+  "Jordan": "Jordania",
+
+  "Portugal": "Portugal",
+  "DR Congo": "RD Congo",
+  "Democratic Republic of the Congo": "RD Congo",
+  "Congo DR": "RD Congo",
+  "Uzbekistan": "Uzbekistán",
+  "Colombia": "Colombia",
+
+  "England": "Inglaterra",
+  "Croatia": "Croacia",
+  "Ghana": "Ghana",
+  "Panama": "Panamá"
+}

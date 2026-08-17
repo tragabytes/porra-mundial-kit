@@ -1,0 +1,44 @@
+# Claude Code local settings
+.claude/settings.local.json
+
+# Office temp files
+~$*.xlsx
+~$*.docx
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Datos privados de los jugadores (sus Excel con predicciones)
+predictions/
+
+# Artefactos generados (leaderboard PNG, recalc tmps, etc.)
+leaderboard.png
+_*.xlsx
+_*.png
+_*.py
+.ingest_failures
+
+# Documentación sensible (contratos, facturas, copias de DNI, etc.)
+contratos/
+
+# Secrets nunca al repo
+.env
+.env.*
+!.env.example
+
+# Config local del auditor (caducidades de tokens propios)
+data/token_expiries.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (para vps/)
+vps/node_modules/
+vps/wwebjs_auth/
+vps/.wwebjs_cache/

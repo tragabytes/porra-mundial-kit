@@ -1,0 +1,21 @@
+{
+  "name": "porra-mundial-2026-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp para porra del Mundial 2026 (Express + whatsapp-web.js)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  },
+  "private": true
+}

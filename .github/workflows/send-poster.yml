@@ -1,0 +1,57 @@
+name: Enviar cartel de reclutamiento
+
+# Envío PUNTUAL del cartel (design/cartel_recluta.png) a los grupos de WhatsApp.
+# Manual: Actions -> "Enviar cartel de reclutamiento" -> Run workflow.
+# Reutiliza el mismo POST /publish del bot que usa el cron del leaderboard.
+#
+# SEGURIDAD: dry_run está en 'true' por defecto -> NO envía nada, solo simula y
+# loguea. Para enviar de verdad hay que poner dry_run = false explícitamente.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = solo simula (no toca WhatsApp). Pon 'false' para enviar de verdad."
+        required: false
+        default: "true"
+      only_pool:
+        description: "Qué grupo: familia | amigos | all"
+        required: false
+        default: "all"
+
+# Evita dos envíos solapados del cartel.
+concurrency:
+  group: porra-send-poster
+  cancel-in-progress: false
+
+# Solo lee el repo (no hace push, a diferencia del cron).
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Enviar cartel a los grupos
+        env:
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          ONLY_POOL: ${{ inputs.only_pool }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          WHATSAPP_GROUP_ID_FAMILIA: ${{ secrets.WHATSAPP_GROUP_ID_FAMILIA }}
+          WHATSAPP_GROUP_ID_AMIGOS: ${{ secrets.WHATSAPP_GROUP_ID_AMIGOS }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/send_poster.py

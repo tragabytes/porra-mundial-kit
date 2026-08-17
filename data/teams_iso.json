@@ -1,0 +1,65 @@
+{
+  "_comment": "Mapeo nombre en español (matejero) → código ISO de 3 letras usado por matejero en WORLDCUP y por el template del leaderboard.",
+  "_source": "Verificado contra el comentario _groups de teams_en_es.json y la hoja WORLDCUP del ADMIN paid.",
+  "_total_teams": 48,
+
+  "México": "MEX",
+  "Sudáfrica": "RSA",
+  "Corea del Sur": "KOR",
+  "República Checa": "CZE",
+
+  "Canadá": "CAN",
+  "Bosnia y Herzegovina": "BIH",
+  "Catar": "QAT",
+  "Suiza": "SUI",
+
+  "Brasil": "BRA",
+  "Marruecos": "MAR",
+  "Haití": "HAI",
+  "Escocia": "SCO",
+
+  "Estados Unidos": "USA",
+  "Paraguay": "PAR",
+  "Australia": "AUS",
+  "Turquía": "TUR",
+
+  "Alemania": "GER",
+  "Curazao": "CUW",
+  "Costa de Marfil": "CIV",
+  "Ecuador": "ECU",
+
+  "Países Bajos": "NED",
+  "Japón": "JPN",
+  "Suecia": "SWE",
+  "Túnez": "TUN",
+
+  "Bélgica": "BEL",
+  "Egipto": "EGY",
+  "Irán": "IRN",
+  "Nueva Zelanda": "NZL",
+
+  "España": "ESP",
+  "Cabo Verde": "CPV",
+  "Arabia Saudita": "KSA",
+  "Uruguay": "URU",
+
+  "Francia": "FRA",
+  "Senegal": "SEN",
+  "Irak": "IRQ",
+  "Noruega": "NOR",
+
+  "Argentina": "ARG",
+  "Argelia": "ALG",
+  "Austria": "AUT",
+  "Jordania": "JOR",
+
+  "Portugal": "POR",
+  "RD Congo": "COD",
+  "Uzbekistán": "UZB",
+  "Colombia": "COL",
+
+  "Inglaterra": "ENG",
+  "Croacia": "CRO",
+  "Ghana": "GHA",
+  "Panamá": "PAN"
+}

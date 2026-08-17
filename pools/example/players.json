@@ -1,0 +1,29 @@
+[
+  {
+    "slot": 1,
+    "name": "Lucía",
+    "club": "Real Betis",
+    "national": "España",
+    "bota_oro": "Mbappé",
+    "balon_oro": "Lamine Yamal",
+    "campeon": "España"
+  },
+  {
+    "slot": 2,
+    "name": "Marcos",
+    "club": "Athletic Club",
+    "national": "Argentina",
+    "bota_oro": "Julián Álvarez",
+    "balon_oro": "Messi",
+    "campeon": "Argentina"
+  },
+  {
+    "slot": 3,
+    "name": "Elena",
+    "club": null,
+    "national": "Portugal",
+    "bota_oro": null,
+    "balon_oro": null,
+    "campeon": "Francia"
+  }
+]

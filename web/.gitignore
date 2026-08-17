@@ -1,0 +1,4 @@
+# Artefactos locales de previsualización (el data.json real lo genera el cron y
+# lo sirve el VPS; ver build_web_data.py y la Fase 3). No versionar.
+data.json
+*.png

@@ -1,0 +1,72 @@
+name: Cron — Salud del bot (WhatsApp)
+
+# Cada 2 horas comprueba /health del VPS. Si el bot no responde o la sesión de
+# WhatsApp no está "ready" (caduca a ~14 días sin abrir la app en el móvil,
+# LOGOUT del 11/06), la run se pone roja y GitHub avisa por email al organizador.
+# También se pone roja si el VPS o Caddy están caídos — igual de avisable.
+# Reintenta hasta 3 veces antes de cantar fallo: un parpadeo puntual de DNS/red
+# (p.ej. DuckDNS sin resolver un instante, como el 26/06) o un /health "starting"
+# justo tras un reinicio no deben disparar una falsa alarma; una caída real
+# persiste en los 3 intentos y se avisa igual.
+# Requisito (una vez): GitHub → Settings → Notifications → email de workflows
+# fallidos activado (es el default).
+on:
+  # Descomenta el schedule al arrancar el torneo (con el secret VPS_HEALTH_URL ya
+  # configurado). Se publica comentado para que un clon del repo no arranque un
+  # cron que solo puede fallar.
+  # schedule:
+  #   - cron: "23 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Comprobar /health del bot
+        run: |
+          ATTEMPTS=3
+          for i in $(seq 1 $ATTEMPTS); do
+            FAIL=""
+            RESP=$(curl -fsS --max-time 20 "${{ secrets.VPS_HEALTH_URL }}") || FAIL="curl"
+            if [ -z "$FAIL" ]; then
+              echo "Respuesta (intento $i): $RESP"
+              STATUS=$(echo "$RESP" | jq -r '.status')
+              WA=$(echo "$RESP" | jq -r '.whatsapp')
+              if [ "$STATUS" = "up" ] && [ "$WA" = "ready" ]; then
+                echo "Bot sano: status=$STATUS whatsapp=$WA (intento $i)"
+                exit 0
+              fi
+              FAIL="degraded"
+            fi
+            if [ "$i" -lt "$ATTEMPTS" ]; then
+              echo "Intento $i/$ATTEMPTS falló ($FAIL); reintento en 15 s..."
+              sleep 15
+            fi
+          done
+          # Agotados los reintentos: el fallo es real y persistente.
+          if [ "$FAIL" = "degraded" ]; then
+            echo "::error::Bot degradado: status=$STATUS whatsapp=$WA (¿sesión de WhatsApp caducada? re-vincular escaneando el QR; ver vps/README.md)."
+          else
+            echo "::error::El bot no responde tras $ATTEMPTS intentos (VPS/Caddy/pm2 caído o DNS sin resolver)."
+          fi
+          exit 1
+
+      - name: Avisar al móvil (ntfy) si algo falló
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -fsS \
+              -H "Title: Porra Mundial bot" \
+              -H "Priority: high" \
+              -H "Tags: warning" \
+              -d "El vigilante no pudo confirmar que el bot este sano: VPS caido o sesion de WhatsApp caducada. Revisa (abre WhatsApp en el movil de la linea si hace falta)." \
+              "https://ntfy.sh/$NTFY_TOPIC" || true
+          else
+            echo "NTFY_TOPIC no configurado; aviso al movil omitido."
+          fi

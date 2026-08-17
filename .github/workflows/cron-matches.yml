@@ -1,0 +1,234 @@
+name: Cron — Procesar resultados de partidos
+
+# Sin schedule propio: lo dispara el bot del VPS (dispatcher en vps/server.js)
+# vía workflow_dispatch — una vez ~18 min antes de cada kickoff (preview) y
+# desde kickoff+110 min cada 30 min hasta que el partido queda procesado en
+# ambos pools. El schedule */15 original se retiró el 12/06: GitHub lo saltaba
+# durante horas (best-effort) y se perdió el preview de Canadá–Bosnia. El
+# dispatch manual desde Actions sigue funcionando como palanca de rescate.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Si 'true', ejecuta con DRY_RUN=1 (no toca WhatsApp ni Claude real)"
+        required: false
+        default: "false"
+      only_pool:
+        description: "Qué porra ejecutar: familia | amigos | all"
+        required: false
+        default: "all"
+
+# Concurrency global para ambos jobs: si dos cron-runs solapan, esperan,
+# nunca pisan. cancel-in-progress=false: dejamos terminar el que va.
+concurrency:
+  group: porra-cron-global
+  cancel-in-progress: false
+
+# El push lo hace GH_PAT (PAT del organizador, scopeado a Contents en este repo).
+# GITHUB_TOKEN por defecto solo necesita leer. Restringir explícitamente para
+# que un step comprometido no pueda escalar a otros recursos del repo.
+permissions:
+  contents: read
+
+jobs:
+  pool-familia:
+    if: ${{ inputs.only_pool != 'amigos' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # LibreOffice (para recalc del ADMIN) cacheando los .deb: en cache-hit no se
+      # toca el espejo de Ubuntu (que el 17/06 se atascó >5 min y tumbó un job por
+      # el timeout). En cache-miss se descargan con un timeout corto como red de
+      # seguridad. Clave compartida entre jobs/runs; bump -v1→-v2 para invalidar.
+      - name: Cache LibreOffice .deb
+        id: lo-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/lo-debs
+          key: libreoffice-calc-deb-${{ runner.os }}-v1
+      - name: Install LibreOffice (headless)
+        run: |
+          if [ "${{ steps.lo-cache.outputs.cache-hit }}" != "true" ]; then
+            mkdir -p ~/lo-debs/partial
+            sudo apt-get update -qq
+            timeout 300 sudo apt-get -y -d -o Dir::Cache::archives="$HOME/lo-debs" \
+              install --no-install-recommends libreoffice-calc
+            sudo chown -R "$(whoami)" ~/lo-debs
+          fi
+          sudo dpkg -i ~/lo-debs/*.deb || sudo apt-get -y -f install
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.49.0-${{ runner.os }}
+      - name: Install Playwright Chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            python -m playwright install --with-deps chromium
+          else
+            python -m playwright install-deps chromium
+          fi
+
+      - name: Run orchestrator (familia)
+        env:
+          POOL_ID: familia
+          WHATSAPP_GROUP_ID: ${{ secrets.WHATSAPP_GROUP_ID_FAMILIA }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/ingest_match_results.py
+
+      - name: Generar y sincronizar web_data (familia)
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/build_web_data.py --pool familia --sync || true
+
+      - name: Commit y push si hay cambios (familia)
+        run: |
+          git config user.name "porra-bot"
+          git config user.email "porra-bot@users.noreply.github.com"
+          if git diff --quiet pools/familia/ 2>/dev/null; then
+            echo "Sin cambios en pools/familia/."
+          else
+            git add pools/familia/ADMIN.xlsx pools/familia/state.json
+            git add pools/familia/sent_messages.jsonl 2>/dev/null || true
+            git commit -m "chore(cron/familia): partido(s) procesado(s) $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase
+            git push
+          fi
+
+      # Tras commitear lo procesado: si algún partido falló, run roja → email.
+      - name: Run roja si algún partido falló (familia)
+        run: |
+          if [ -f .ingest_failures ]; then
+            echo "::error::$(cat .ingest_failures) — ver log del orquestador; el próximo cron reintenta solo."
+            exit 1
+          fi
+
+  pool-amigos:
+    needs: pool-familia
+    if: ${{ always() && inputs.only_pool != 'familia' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Espacia el envío de WhatsApp para no encadenar 2 mensajes con imagen
+      # al mismo número en <5s (riesgo de baneo del número).
+      - name: Spread WhatsApp send
+        run: sleep 30
+
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 1
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # LibreOffice (para recalc del ADMIN) cacheando los .deb: en cache-hit no se
+      # toca el espejo de Ubuntu (que el 17/06 se atascó >5 min y tumbó un job por
+      # el timeout). En cache-miss se descargan con un timeout corto como red de
+      # seguridad. Clave compartida entre jobs/runs; bump -v1→-v2 para invalidar.
+      - name: Cache LibreOffice .deb
+        id: lo-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/lo-debs
+          key: libreoffice-calc-deb-${{ runner.os }}-v1
+      - name: Install LibreOffice (headless)
+        run: |
+          if [ "${{ steps.lo-cache.outputs.cache-hit }}" != "true" ]; then
+            mkdir -p ~/lo-debs/partial
+            sudo apt-get update -qq
+            timeout 300 sudo apt-get -y -d -o Dir::Cache::archives="$HOME/lo-debs" \
+              install --no-install-recommends libreoffice-calc
+            sudo chown -R "$(whoami)" ~/lo-debs
+          fi
+          sudo dpkg -i ~/lo-debs/*.deb || sudo apt-get -y -f install
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.49.0-${{ runner.os }}
+      - name: Install Playwright Chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            python -m playwright install --with-deps chromium
+          else
+            python -m playwright install-deps chromium
+          fi
+
+      - name: Run orchestrator (amigos)
+        env:
+          POOL_ID: amigos
+          WHATSAPP_GROUP_ID: ${{ secrets.WHATSAPP_GROUP_ID_AMIGOS }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/ingest_match_results.py
+
+      - name: Generar y sincronizar web_data (amigos)
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          VPS_URL: ${{ secrets.VPS_URL }}
+          VPS_WEBHOOK_TOKEN: ${{ secrets.VPS_WEBHOOK_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/build_web_data.py --pool amigos --sync || true
+
+      - name: Commit y push si hay cambios (amigos)
+        run: |
+          git config user.name "porra-bot"
+          git config user.email "porra-bot@users.noreply.github.com"
+          if git diff --quiet pools/amigos/ 2>/dev/null; then
+            echo "Sin cambios en pools/amigos/."
+          else
+            git add pools/amigos/ADMIN.xlsx pools/amigos/state.json
+            git add pools/amigos/sent_messages.jsonl 2>/dev/null || true
+            git commit -m "chore(cron/amigos): partido(s) procesado(s) $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase
+            git push
+          fi
+
+      # Tras commitear lo procesado: si algún partido falló, run roja → email.
+      - name: Run roja si algún partido falló (amigos)
+        run: |
+          if [ -f .ingest_failures ]; then
+            echo "::error::$(cat .ingest_failures) — ver log del orquestador; el próximo cron reintenta solo."
+            exit 1
+          fi
